@@ -1,5 +1,6 @@
 from flask import Flask, send_from_directory, jsonify, request, render_template_string
 import os
+import json
 
 app = Flask(__name__)
 
@@ -42,6 +43,7 @@ def index():
         else:
             return "Invalid file type. Only .hex files are allowed.", 400
 
+    # 使用 render_template_string 將 HTML 內嵌在 Python 檔案中
     return render_template_string('''
     <html>
     <body>
@@ -51,15 +53,69 @@ def index():
             <input type="file" name="file">
             <button type="submit">Upload</button>
         </form>
+
         <h2>Available Firmware</h2>
-        <a href="/list-files">List Available Firmware Files</a>
+        <ul id="file-list">
+        </ul>
+
+        <script>
+            fetch('/list-files')
+                .then(response => response.json())
+                .then(data => {
+                    const fileList = document.getElementById('file-list');
+                    data.hex_files.forEach(file => {
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = `${file} <button onclick="setLatestVersion('${file}')">Set as Latest</button>`;
+                        fileList.appendChild(listItem);
+                    });
+                })
+                .catch(error => console.error('Error fetching files:', error));
+
+            function setLatestVersion(filename) {
+                if (confirm(`Are you sure you want to set ${filename} as the latest version?`)) {
+                    fetch('/set-latest-version', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ filename: filename })
+                    })
+                    .then(response => response.text())
+                    .then(data => alert(data))
+                    .catch(error => console.error('Error setting latest version:', error));
+                }
+            }
+        </script>
     </body>
     </html>
     ''')
 
-@app.route('/hello')
-def hello():
-    return jsonify(message="hello world")
+@app.route('/version')
+def version():
+    try:
+        with open("version.json", "r") as f:
+            version_data = json.load(f)
+        return jsonify(latest_version=version_data.get("latest_version"))
+    except FileNotFoundError:
+        return jsonify(latest_version="Version file not found"), 404
+
+@app.route('/set-latest-version', methods=['POST'])
+def set_latest_version():
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        if not filename:
+            return "Filename is required", 400
+
+        #latest_version = filename[:-4]  # 移除 ".hex" 副檔名
+        latest_version = filename
+        version_data = {"latest_version": latest_version}
+        with open("version.json", "w") as f:
+            json.dump(version_data, f)
+
+        return f"Latest version set to {latest_version}"
+    except Exception as e:
+        return f"Error setting latest version: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
