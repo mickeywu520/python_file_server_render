@@ -12,7 +12,9 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 @app.route('/download/<path:filename>')
 def download_file(filename):
     try:
-        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+        return send_from_directory(app.config['UPLOAD_FOLDER'],
+                                   filename,
+                                   as_attachment=True)
     except FileNotFoundError:
         return "File not found", 404
 
@@ -37,7 +39,8 @@ def index():
             return "No selected file", 400
 
         if file and file.filename.endswith('.hex'):
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'],
+                                    file.filename)
             file.save(filepath)
             return f"File {file.filename} uploaded successfully!"
         else:
@@ -57,6 +60,8 @@ def index():
         <h2>Available Firmware</h2>
         <ul id="file-list">
         </ul>
+
+        <button onclick="clearLatestVersion()">Clear Latest Version</button>
 
         <script>
             fetch('/list-files')
@@ -85,10 +90,21 @@ def index():
                     .catch(error => console.error('Error setting latest version:', error));
                 }
             }
+
+            function clearLatestVersion() {
+                fetch('/clear-version', { method: 'POST' })
+                    .then(response => response.text())
+                    .then(data => alert(data))
+                    .catch(error => console.error('Error clearing latest version:', error));
+            }
         </script>
     </body>
     </html>
     ''')
+
+@app.route('/hello')
+def hello():
+    return jsonify(message="hello world")
 
 @app.route('/version')
 def version():
@@ -116,6 +132,16 @@ def set_latest_version():
         return f"Latest version set to {latest_version}"
     except Exception as e:
         return f"Error setting latest version: {str(e)}", 500
+
+@app.route('/clear-version', methods=['POST'])  # 新增的 API endpoint
+def clear_version():
+    try:
+        version_data = {"latest_version": None}  # 設定 latest_version 為 null
+        with open("version.json", "w") as f:
+            json.dump(version_data, f)
+        return "Latest version cleared."
+    except Exception as e:
+        return f"Error clearing latest version: {str(e)}", 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
